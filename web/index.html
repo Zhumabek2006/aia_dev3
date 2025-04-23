@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Testing Platform</title>
+
+  <!-- Firebase App (основной модуль) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <!-- Firebase Analytics -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-analytics-compat.js"></script>
+  <!-- Firebase Auth -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <!-- Firebase Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <!-- Firebase Messaging (если используете в веб) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
+
+  <script>
+    // Инициализация Firebase для веб
+    const firebaseConfig = {
+      apiKey: "AIzaSyARB9ky8yWISoPNzrvdimGztT2ZYHsKIQ",
+      authDomain: "testingplatform-2d004.firebaseapp.com",
+      projectId: "testingplatform-2d004",
+      storageBucket: "testingplatform-2d004.firebasestorage.app",
+      messagingSenderId: "434702039346",
+      appId: "1:434702039346:web:230d63292f48051d20747f2b",
+      measurementId: "G-NXD6SMWPCQ"
+    };
+
+    // Инициализация Firebase
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <script src="main.dart.js" type="application/javascript"></script>
+</body>
+</html>
