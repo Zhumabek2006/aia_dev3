@@ -5,18 +5,65 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class AdminEditCategoryScreen extends StatefulWidget {
+  const AdminEditCategoryScreen({super.key});
+
   @override
-  _AdminEditCategoryScreenState createState() => _AdminEditCategoryScreenState();
+  State<AdminEditCategoryScreen> createState() => AdminEditCategoryScreenState();
 }
 
-class _AdminEditCategoryScreenState extends State<AdminEditCategoryScreen> {
+class AdminEditCategoryScreenState extends State<AdminEditCategoryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _durationController = TextEditingController();
   final _pointsController = TextEditingController();
+  final List<String> _languages = ['ru', 'en'];
+  final List<String> _selectedLanguages = [];
   final _firestore = FirebaseFirestore.instance;
-  List<String> _languages = ['ru', 'en', 'ky'];
-  List<String> _selectedLanguages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategory();
+  }
+
+  Future<void> _loadCategory() async {
+    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+    final testTypeId = data['testTypeId'] as String;
+    final categoryId = data['categoryId'] as String;
+    final categoryDoc = await _firestore
+        .collection('test_types')
+        .doc(testTypeId)
+        .collection('categories')
+        .doc(categoryId)
+        .get();
+    setState(() {
+      _nameController.text = categoryDoc['name'] ?? '';
+      _durationController.text = categoryDoc['duration'] ?? '';
+      _pointsController.text = (categoryDoc['points_per_question'] ?? 1).toString();
+      _selectedLanguages.clear();
+      _selectedLanguages.addAll(List<String>.from(categoryDoc['languages'] ?? []));
+    });
+  }
+
+  Future<void> _updateCategory() async {
+    if (_formKey.currentState!.validate()) {
+      final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+      final testTypeId = data['testTypeId'] as String;
+      final categoryId = data['categoryId'] as String;
+      final contextCopy = context; // Сохраняем BuildContext
+
+      await _firestore.collection('test_types').doc(testTypeId).collection('categories').doc(categoryId).update({
+        'name': _nameController.text,
+        'duration': _durationController.text,
+        'languages': _selectedLanguages,
+        'points_per_question': int.parse(_pointsController.text),
+      });
+
+      if (contextCopy.mounted) {
+        contextCopy.go('/admin');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -26,33 +73,8 @@ class _AdminEditCategoryScreenState extends State<AdminEditCategoryScreen> {
     super.dispose();
   }
 
-  Future<void> _updateCategory(String testTypeId, String categoryId) async {
-    if (_formKey.currentState!.validate()) {
-      await _firestore
-          .collection('test_types')
-          .doc(testTypeId)
-          .collection('categories')
-          .doc(categoryId)
-          .update({
-        'name': _nameController.text.trim(),
-        'duration': _durationController.text.trim(),
-        'languages': _selectedLanguages,
-        'points_per_question': int.parse(_pointsController.text.trim()),
-      });
-      context.go('/admin');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String testTypeId = data['testTypeId'];
-    final String categoryId = data['categoryId'];
-    _nameController.text = data['name'];
-    _durationController.text = data['duration'];
-    _pointsController.text = data['pointsPerQuestion'].toString();
-    _selectedLanguages = List<String>.from(data['languages'] ?? []);
-
     return Scaffold(
       appBar: AppBar(title: const Text("Edit Category")),
       body: Padding(
@@ -61,27 +83,30 @@ class _AdminEditCategoryScreenState extends State<AdminEditCategoryScreen> {
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CustomTextField(
                   controller: _nameController,
                   labelText: "Category Name",
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return "Please enter a category name";
+                      return "Please enter category name";
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
                 CustomTextField(
                   controller: _durationController,
                   labelText: "Duration (e.g., 1h)",
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return "Please enter a duration";
+                      return "Please enter duration";
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
                 CustomTextField(
                   controller: _pointsController,
                   labelText: "Points per Question",
@@ -90,32 +115,32 @@ class _AdminEditCategoryScreenState extends State<AdminEditCategoryScreen> {
                     if (value == null || value.isEmpty) {
                       return "Please enter points per question";
                     }
-                    if (int.tryParse(value) == null || int.parse(value) <= 0) {
+                    if (int.tryParse(value) == null) {
                       return "Please enter a valid number";
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-                const Text("Select Languages", style: TextStyle(fontSize: 16)),
-                ..._languages.map((language) {
-                  return CheckboxListTile(
-                    title: Text(language),
-                    value: _selectedLanguages.contains(language),
-                    onChanged: (bool? value) {
-                      setState(() {
-                        if (value == true) {
-                          _selectedLanguages.add(language);
-                        } else {
-                          _selectedLanguages.remove(language);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
+                const Text("Select Languages", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ..._languages.map((language) => CheckboxListTile(
+                  title: Text(language),
+                  value: _selectedLanguages.contains(language),
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedLanguages.add(language);
+                      } else {
+                        _selectedLanguages.remove(language);
+                      }
+                    });
+                  },
+                )),
+                const SizedBox(height: 16),
                 CustomButton(
                   text: "Update Category",
-                  onPressed: () => _updateCategory(testTypeId, categoryId),
+                  onPressed: _updateCategory,
+                  color: Colors.blue,
                 ),
               ],
             ),

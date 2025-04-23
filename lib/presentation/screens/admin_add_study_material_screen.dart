@@ -1,33 +1,41 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class AdminAddStudyMaterialScreen extends StatefulWidget {
+  const AdminAddStudyMaterialScreen({super.key});
+
   @override
-  _AdminAddStudyMaterialScreenState createState() => _AdminAddStudyMaterialScreenState();
+  State<AdminAddStudyMaterialScreen> createState() => AdminAddStudyMaterialScreenState();
 }
 
-class _AdminAddStudyMaterialScreenState extends State<AdminAddStudyMaterialScreen> {
+class AdminAddStudyMaterialScreenState extends State<AdminAddStudyMaterialScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
 
-  Future<void> _addStudyMaterial(String testTypeId) async {
+  Future<void> _addStudyMaterial() async {
     if (_formKey.currentState!.validate()) {
-      await _firestore
-          .collection('test_types')
-          .doc(testTypeId)
-          .collection('study_materials')
-          .add({
-        'title': _titleController.text.trim(),
-        'content': _contentController.text.trim(),
-        'created_by': 'admin',
+      final user = _auth.currentUser;
+      final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+      final testTypeId = data['testTypeId'] as String;
+      final contextCopy = context; // Сохраняем BuildContext
+
+      await _firestore.collection('test_types').doc(testTypeId).collection('study_materials').add({
+        'title': _titleController.text,
+        'content': _contentController.text,
+        'created_by': user!.uid,
         'created_at': DateTime.now().toIso8601String(),
       });
-      context.go('/admin');
+
+      if (contextCopy.mounted) {
+        contextCopy.go('/admin');
+      }
     }
   }
 
@@ -40,9 +48,6 @@ class _AdminAddStudyMaterialScreenState extends State<AdminAddStudyMaterialScree
 
   @override
   Widget build(BuildContext context) {
-    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String testTypeId = data['testTypeId'];
-
     return Scaffold(
       appBar: AppBar(title: const Text("Add Study Material")),
       body: Padding(
@@ -50,20 +55,23 @@ class _AdminAddStudyMaterialScreenState extends State<AdminAddStudyMaterialScree
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CustomTextField(
                 controller: _titleController,
                 labelText: "Title",
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Please enter a title";
+                    return "Please enter title";
                   }
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
               CustomTextField(
                 controller: _contentController,
                 labelText: "Content",
+                maxLines: 5,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Please enter content";
@@ -71,9 +79,11 @@ class _AdminAddStudyMaterialScreenState extends State<AdminAddStudyMaterialScree
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
               CustomButton(
                 text: "Add Study Material",
-                onPressed: () => _addStudyMaterial(testTypeId),
+                onPressed: _addStudyMaterial,
+                color: Colors.green,
               ),
             ],
           ),

@@ -5,6 +5,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class AdminEditTestTypeScreen extends StatefulWidget {
+  const AdminEditTestTypeScreen({super.key});
   @override
   _AdminEditTestTypeScreenState createState() => _AdminEditTestTypeScreenState();
 }

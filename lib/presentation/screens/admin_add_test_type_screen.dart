@@ -1,27 +1,37 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class AdminAddTestTypeScreen extends StatefulWidget {
+  const AdminAddTestTypeScreen({super.key});
+
   @override
-  _AdminAddTestTypeScreenState createState() => _AdminAddTestTypeScreenState();
+  State<AdminAddTestTypeScreen> createState() => AdminAddTestTypeScreenState();
 }
 
-class _AdminAddTestTypeScreenState extends State<AdminAddTestTypeScreen> {
+class AdminAddTestTypeScreenState extends State<AdminAddTestTypeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
 
   Future<void> _addTestType() async {
     if (_formKey.currentState!.validate()) {
+      final user = _auth.currentUser;
+      final contextCopy = context; // Сохраняем BuildContext
+
       await _firestore.collection('test_types').add({
-        'name': _nameController.text.trim(),
-        'created_by': 'admin',
+        'name': _nameController.text,
+        'created_by': user!.uid,
         'created_at': DateTime.now().toIso8601String(),
       });
-      context.go('/admin');
+
+      if (contextCopy.mounted) {
+        contextCopy.go('/admin');
+      }
     }
   }
 
@@ -40,20 +50,23 @@ class _AdminAddTestTypeScreenState extends State<AdminAddTestTypeScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CustomTextField(
                 controller: _nameController,
                 labelText: "Test Type Name",
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Please enter a test type name";
+                    return "Please enter test type name";
                   }
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
               CustomButton(
                 text: "Add Test Type",
                 onPressed: _addTestType,
+                color: Colors.green,
               ),
             ],
           ),

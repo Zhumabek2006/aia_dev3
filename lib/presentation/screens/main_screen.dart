@@ -1,61 +1,49 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/custom_button.dart';
 
 class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
   @override
   _MainScreenState createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   final _firestore = FirebaseFirestore.instance;
-  final _auth = FirebaseAuth.instance;
+  String? _selectedTestType;
+  String? _selectedCategory;
+  String? _selectedLanguage;
   List<String> _testTypes = [];
   List<String> _categories = [];
   List<String> _languages = [];
-  String? _selectedTestType;
-  String? _selectedTestTypeId;
-  String? _selectedCategory;
-  String? _selectedCategoryId;
-  String? _selectedLanguage;
 
   @override
   void initState() {
     super.initState();
-    _loadUserPreferences();
+    _loadTestTypes();
   }
 
-  Future<void> _loadUserPreferences() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
-      List<String> preferredTests = List<String>.from(userDoc['preferred_tests'] ?? []);
-
-      // Загрузка доступных видов тестов
-      QuerySnapshot testTypesSnapshot = await _firestore.collection('test_types').get();
-      setState(() {
-        _testTypes = testTypesSnapshot.docs
-            .where((doc) => preferredTests.isEmpty || preferredTests.contains(doc['name']))
-            .map((doc) => doc['name'] as String)
-            .toList();
-        if (_testTypes.isNotEmpty) {
-          _selectedTestType = _testTypes.first;
-          _selectedTestTypeId = testTypesSnapshot.docs
-              .firstWhere((doc) => doc['name'] == _selectedTestType)
-              .id;
-          _loadCategories();
-        }
-      });
-    }
+  Future<void> _loadTestTypes() async {
+    QuerySnapshot testTypesSnapshot = await _firestore.collection('test_types').get();
+    setState(() {
+      _testTypes = testTypesSnapshot.docs.map((doc) => doc['name'] as String).toList();
+      if (_testTypes.isNotEmpty) {
+        _selectedTestType = _testTypes.first;
+        _loadCategories(_selectedTestType!);
+      }
+    });
   }
 
-  Future<void> _loadCategories() async {
-    if (_selectedTestTypeId == null) return;
+  Future<void> _loadCategories(String testType) async {
+    QuerySnapshot testTypesSnapshot = await _firestore.collection('test_types').where('name', isEqualTo: testType).get();
+    if (testTypesSnapshot.docs.isEmpty) return;
 
+    String testTypeId = testTypesSnapshot.docs.first.id;
     QuerySnapshot categoriesSnapshot = await _firestore
         .collection('test_types')
-        .doc(_selectedTestTypeId)
+        .doc(testTypeId)
         .collection('categories')
         .get();
 
@@ -63,155 +51,166 @@ class _MainScreenState extends State<MainScreen> {
       _categories = categoriesSnapshot.docs.map((doc) => doc['name'] as String).toList();
       if (_categories.isNotEmpty) {
         _selectedCategory = _categories.first;
-        _selectedCategoryId = categoriesSnapshot.docs
-            .firstWhere((doc) => doc['name'] == _selectedCategory)
-            .id;
-        _loadLanguages();
-      } else {
-        _languages = [];
-        _selectedLanguage = null;
+        _loadLanguages(testTypeId, _selectedCategory!);
       }
     });
   }
 
-  Future<void> _loadLanguages() async {
-    if (_selectedTestTypeId == null || _selectedCategoryId == null) return;
-
-    DocumentSnapshot categoryDoc = await _firestore
+  Future<void> _loadLanguages(String testTypeId, String category) async {
+    QuerySnapshot categoriesSnapshot = await _firestore
         .collection('test_types')
-        .doc(_selectedTestTypeId)
+        .doc(testTypeId)
         .collection('categories')
-        .doc(_selectedCategoryId)
+        .where('name', isEqualTo: category)
         .get();
 
+    if (categoriesSnapshot.docs.isEmpty) return;
+
+    final categoryDoc = categoriesSnapshot.docs.first;
     setState(() {
       _languages = List<String>.from(categoryDoc['languages'] ?? []);
-      _selectedLanguage = _languages.isNotEmpty ? _languages.first : null;
+      if (_languages.isNotEmpty) {
+        _selectedLanguage = _languages.first;
+      }
     });
   }
 
-  void _startTest() {
-    if (_selectedTestTypeId != null && _selectedCategoryId != null && _selectedLanguage != null) {
-      context.go('/test', extra: {
-        'testTypeId': _selectedTestTypeId,
-        'categoryId': _selectedCategoryId,
-        'language': _selectedLanguage,
-        'testName': _selectedTestType,
-        'categoryName': _selectedCategory,
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select a test, category, and language")),
-      );
-    }
+  Future<String> _getTestTypeId(String testType) async {
+    QuerySnapshot testTypesSnapshot = await _firestore
+        .collection('test_types')
+        .where('name', isEqualTo: testType)
+        .get();
+    return testTypesSnapshot.docs.first.id;
+  }
+
+  Future<String> _getCategoryId(String testTypeId, String category) async {
+    QuerySnapshot categoriesSnapshot = await _firestore
+        .collection('test_types')
+        .doc(testTypeId)
+        .collection('categories')
+        .where('name', isEqualTo: category)
+        .get();
+    return categoriesSnapshot.docs.first.id;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Testing Platform"),
+        title: const Text("Testing Platform"),
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () async {
-              await _auth.signOut();
-              context.go('/');
+            icon: const Icon(Icons.admin_panel_settings),
+            onPressed: () {
+              context.go('/admin');
             },
           ),
         ],
       ),
       body: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_testTypes.isEmpty)
-              Text("No tests available. Please select tests in Settings."),
-            if (_testTypes.isNotEmpty)
-              DropdownButton<String>(
-                value: _selectedTestType,
-                hint: Text("Select Test Type"),
-                isExpanded: true,
-                items: _testTypes.map((type) {
-                  return DropdownMenuItem<String>(
-                    value: type,
-                    child: Text(type),
+            const Text("Select Test Type", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _selectedTestType,
+              hint: const Text("Select Test Type"),
+              isExpanded: true,
+              items: _testTypes.map((type) {
+                return DropdownMenuItem<String>(
+                  value: type,
+                  child: Text(type),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedTestType = value;
+                  _categories = [];
+                  _selectedCategory = null;
+                  _languages = [];
+                  _selectedLanguage = null;
+                });
+                _loadCategories(value!);
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text("Select Category", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _selectedCategory,
+              hint: const Text("Select Category"),
+              isExpanded: true,
+              items: _categories.map((category) {
+                return DropdownMenuItem<String>(
+                  value: category,
+                  child: Text(category),
+                );
+              }).toList(),
+              onChanged: (value) async {
+                setState(() {
+                  _selectedCategory = value;
+                  _languages = [];
+                  _selectedLanguage = null;
+                });
+                String testTypeId = await _getTestTypeId(_selectedTestType!);
+                _loadLanguages(testTypeId, value!);
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text("Select Language", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _selectedLanguage,
+              hint: const Text("Select Language"),
+              isExpanded: true,
+              items: _languages.map((language) {
+                return DropdownMenuItem<String>(
+                  value: language,
+                  child: Text(language),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedLanguage = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            CustomButton(
+              text: "Start Test",
+              onPressed: () async {
+                if (_selectedTestType != null && _selectedCategory != null && _selectedLanguage != null) {
+                  String testTypeId = await _getTestTypeId(_selectedTestType!);
+                  String categoryId = await _getCategoryId(testTypeId, _selectedCategory!);
+                  if (mounted) {
+                    context.go('/test', extra: {
+                      'testTypeId': testTypeId,
+                      'categoryId': categoryId,
+                      'language': _selectedLanguage!,
+                      'testName': _selectedTestType!,
+                      'categoryName': _selectedCategory!,
+                    });
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please select a test type, category, and language")),
                   );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedTestType = value;
-                    _selectedTestTypeId = _firestore
-                        .collection('test_types')
-                        .where('name', isEqualTo: value)
-                        .get()
-                        .then((snapshot) => snapshot.docs.first.id);
-                    _loadCategories();
-                  });
-                },
-              ),
-            SizedBox(height: 16),
-            if (_categories.isNotEmpty)
-              DropdownButton<String>(
-                value: _selectedCategory,
-                hint: Text("Select Category"),
-                isExpanded: true,
-                items: _categories.map((category) {
-                  return DropdownMenuItem<String>(
-                    value: category,
-                    child: Text(category),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value;
-                    _selectedCategoryId = _firestore
-                        .collection('test_types')
-                        .doc(_selectedTestTypeId)
-                        .collection('categories')
-                        .where('name', isEqualTo: value)
-                        .get()
-                        .then((snapshot) => snapshot.docs.first.id);
-                    _loadLanguages();
-                  });
-                },
-              ),
-            SizedBox(height: 16),
-            if (_languages.isNotEmpty)
-              DropdownButton<String>(
-                value: _selectedLanguage,
-                hint: Text("Select Language"),
-                isExpanded: true,
-                items: _languages.map((language) {
-                  return DropdownMenuItem<String>(
-                    value: language,
-                    child: Text(language),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedLanguage = value;
-                  });
-                },
-              ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _startTest,
-              child: Text("Start Test"),
+                }
+              },
+              color: Colors.green,
             ),
           ],
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        items: [
+        items: const [
           BottomNavigationBarItem(icon: Icon(Icons.book), label: "Training"),
           BottomNavigationBarItem(icon: Icon(Icons.event), label: "Contests"),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: "History"),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Settings"),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: "Results"),
         ],
+        currentIndex: 0,
         onTap: (index) {
           switch (index) {
             case 0:

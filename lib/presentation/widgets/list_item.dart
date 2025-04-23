@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 class ListItem extends StatelessWidget {
   final String title;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final String subtitle;
+  final VoidCallback? onTap;
 
   const ListItem({
+    super.key,
     required this.title,
-    required this.onEdit,
-    required this.onDelete,
+    required this.subtitle,
+    this.onTap,
   });
 
   @override
@@ -17,19 +18,8 @@ class ListItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
       child: ListTile(
         title: Text(title),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue),
-              onPressed: onEdit,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: onDelete,
-            ),
-          ],
-        ),
+        subtitle: Text(subtitle),
+        onTap: onTap,
       ),
     );
   }

@@ -1,71 +1,55 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/list_item.dart';
 
 class AdminStudyMaterialsScreen extends StatelessWidget {
-  final _firestore = FirebaseFirestore.instance;
-
-  Future<void> _deleteStudyMaterial(String testTypeId, String materialId) async {
-    await _firestore
-        .collection('test_types')
-        .doc(testTypeId)
-        .collection('study_materials')
-        .doc(materialId)
-        .delete();
-  }
+  const AdminStudyMaterialsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+    final testTypeId = data['testTypeId'] as String;
+
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("Study Materials"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              context.go('/admin/add-study-material', extra: {'testTypeId': testTypeId});
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('test_types').snapshots(),
-        builder: (context, testSnapshot) {
-          if (!testSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final testTypes = testSnapshot.data!.docs;
+        stream: FirebaseFirestore.instance
+            .collection('test_types')
+            .doc(testTypeId)
+            .collection('study_materials')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final materials = snapshot.data!.docs;
           return ListView.builder(
-            itemCount: testTypes.length,
-            itemBuilder: (context, testIndex) {
-              final testType = testTypes[testIndex];
-              return ExpansionTile(
-                title: Text(testType['name']),
-                children: [
-                  StreamBuilder<QuerySnapshot>(
-                    stream: _firestore
-                        .collection('test_types')
-                        .doc(testType.id)
-                        .collection('study_materials')
-                        .snapshots(),
-                    builder: (context, matSnapshot) {
-                      if (!matSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-                      final materials = matSnapshot.data!.docs;
-                      return Column(
-                        children: materials.map((material) {
-                          return ListItem(
-                            title: material['title'],
-                            onEdit: () {
-                              context.go('/admin/edit-study-material', extra: {
-                                'testTypeId': testType.id,
-                                'materialId': material.id,
-                                'title': material['title'],
-                                'content': material['content'],
-                              });
-                            },
-                            onDelete: () => _deleteStudyMaterial(testType.id, material.id),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                  CustomButton(
-                    text: "Add Study Material to ${testType['name']}",
-                    onPressed: () {
-                      context.go('/admin/add-study-material', extra: {'testTypeId': testType.id});
-                    },
-                    color: Colors.green,
-                  ),
-                ],
+            itemCount: materials.length,
+            itemBuilder: (context, index) {
+              final material = materials[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                child: ListTile(
+                  title: Text(material['title']),
+                  subtitle: Text("Created: ${material['created_at']}"),
+                  onTap: () {
+                    context.go(
+                      '/admin/edit-study-material',
+                      extra: {
+                        'testTypeId': testTypeId,
+                        'materialId': material.id,
+                      },
+                    );
+                  },
+                ),
               );
             },
           );

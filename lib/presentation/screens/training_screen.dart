@@ -1,71 +1,45 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/list_item.dart';
 
 class TrainingScreen extends StatelessWidget {
-  final _firestore = FirebaseFirestore.instance;
+  const TrainingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Training")),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('test_types').snapshots(),
-        builder: (context, testSnapshot) {
-          if (!testSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final testTypes = testSnapshot.data!.docs;
+        stream: FirebaseFirestore.instance.collection('test_types').snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final testTypes = snapshot.data!.docs;
           return ListView.builder(
             itemCount: testTypes.length,
-            itemBuilder: (context, testIndex) {
-              final testType = testTypes[testIndex];
-              return ExpansionTile(
-                title: Text(testType['name']),
-                children: [
-                  StreamBuilder<QuerySnapshot>(
-                    stream: _firestore
-                        .collection('test_types')
-                        .doc(testType.id)
-                        .collection('study_materials')
-                        .snapshots(),
-                    builder: (context, matSnapshot) {
-                      if (!matSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-                      final materials = matSnapshot.data!.docs;
-                      if (materials.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text("No study materials available."),
+            itemBuilder: (context, index) {
+              final testType = testTypes[index];
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('test_types')
+                    .doc(testType.id)
+                    .collection('study_materials')
+                    .snapshots(),
+                builder: (context, materialSnapshot) {
+                  if (!materialSnapshot.hasData) return const SizedBox.shrink();
+                  final materials = materialSnapshot.data!.docs;
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                    child: ExpansionTile(
+                      title: Text(testType['name']),
+                      children: materials.map((material) {
+                        return ListTile(
+                          title: Text(material['title']),
+                          subtitle: Text(material['content']),
                         );
-                      }
-                      return Column(
-                        children: materials.map((material) {
-                          return ListItem(
-                            title: material['title'],
-                            onEdit: () {
-                              // Пользователь не может редактировать, но может просмотреть содержимое
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: Text(material['title']),
-                                  content: SingleChildScrollView(
-                                    child: Text(material['content']),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text("Close"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            onDelete: () {}, // У пользователя нет прав на удаление
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                ],
+                      }).toList(),
+                    ),
+                  );
+                },
               );
             },
           );
@@ -80,11 +54,11 @@ class TrainingScreen extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Settings"),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: "Results"),
         ],
-        currentIndex: 0, // Индекс текущего экрана (Training)
+        currentIndex: 0,
         onTap: (index) {
           switch (index) {
             case 0:
-              break; // Уже на этом экране
+              break;
             case 1:
               context.go('/contests');
               break;

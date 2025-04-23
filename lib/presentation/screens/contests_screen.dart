@@ -1,18 +1,19 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../widgets/custom_button.dart';
-import '../widgets/list_item.dart';
 
 class ContestsScreen extends StatefulWidget {
+  const ContestsScreen({super.key});
+
   @override
-  _ContestsScreenState createState() => _ContestsScreenState();
+  State<ContestsScreen> createState() => ContestsScreenState();
 }
 
-class _ContestsScreenState extends State<ContestsScreen> {
+class ContestsScreenState extends State<ContestsScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _messaging = FirebaseMessaging.instance;
@@ -27,13 +28,15 @@ class _ContestsScreenState extends State<ContestsScreen> {
       print('Message data: ${message.data}');
       if (message.notification != null) {
         print('Message also contained a notification: ${message.notification}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "${message.notification!.title}: ${message.notification!.body}",
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "${message.notification!.title}: ${message.notification!.body}",
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     });
   }
@@ -51,15 +54,6 @@ class _ContestsScreenState extends State<ContestsScreen> {
   Future<String> _getTestTypeName(String testTypeId) async {
     final doc = await _firestore.collection('test_types').doc(testTypeId).get();
     return doc['name'] ?? 'Unknown Test';
-  }
-
-  Future<List<String>> _getCategoriesForTestType(String testTypeId) async {
-    final categoriesSnapshot = await _firestore
-        .collection('test_types')
-        .doc(testTypeId)
-        .collection('categories')
-        .get();
-    return categoriesSnapshot.docs.map((doc) => doc['name'] as String).toList();
   }
 
   Future<String> _getFirstCategoryId(String testTypeId) async {
@@ -191,25 +185,21 @@ class _ContestsScreenState extends State<ContestsScreen> {
                                       CustomButton(
                                         text: isSubscribed ? "Unsubscribe" : "Subscribe",
                                         color: isSubscribed ? Colors.orange : Colors.blue,
-                                        onPressed: () => _toggleNotifications(contest.id, !isSubscribed),
+                                        onPressed: () {
+                                          _toggleNotifications(contest.id, !isSubscribed);
+                                        },
                                       ),
                                       if (isJoined && !hasCompleted)
                                         CustomButton(
                                           text: "Start",
                                           color: canStart ? Colors.green : Colors.grey,
                                           onPressed: canStart
-                                              ? () async {
-                                                  final categoryId = await _getFirstCategoryId(contest['test_type_id']);
-                                                  final language = await _getFirstLanguage(contest['test_type_id'], categoryId);
-                                                  context.go('/test', extra: {
-                                                    'testTypeId': contest['test_type_id'],
-                                                    'categoryId': categoryId,
-                                                    'language': language,
-                                                    'testName': testTypeSnapshot.data,
-                                                    'categoryName': 'Contest Category',
-                                                    'contestId': contest.id,
-                                                  });
-                                                }
+                                              ? () => _startContest(
+                                                    context,
+                                                    contest['test_type_id'],
+                                                    testTypeSnapshot.data!,
+                                                    contest.id,
+                                                  )
                                               : null,
                                         ),
                                     ],
@@ -245,14 +235,14 @@ class _ContestsScreenState extends State<ContestsScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Settings"),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: "Results"),
         ],
-        currentIndex: 1, // Индекс текущего экрана (Contests)
+        currentIndex: 1,
         onTap: (index) {
           switch (index) {
             case 0:
               context.go('/training');
               break;
             case 1:
-              break; // Уже на этом экране
+              break;
             case 2:
               context.go('/history');
               break;
@@ -266,5 +256,20 @@ class _ContestsScreenState extends State<ContestsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _startContest(BuildContext context, String testTypeId, String testName, String contestId) async {
+    final categoryId = await _getFirstCategoryId(testTypeId);
+    final language = await _getFirstLanguage(testTypeId, categoryId);
+    if (mounted) {
+      context.go('/test', extra: {
+        'testTypeId': testTypeId,
+        'categoryId': categoryId,
+        'language': language,
+        'testName': testName,
+        'categoryName': 'Contest Category',
+        'contestId': contestId,
+      });
+    }
   }
 }

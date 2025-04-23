@@ -5,24 +5,66 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class AdminEditQuestionScreen extends StatefulWidget {
+  const AdminEditQuestionScreen({super.key});
+
   @override
-  _AdminEditQuestionScreenState createState() => _AdminEditQuestionScreenState();
+  State<AdminEditQuestionScreen> createState() => AdminEditQuestionScreenState();
 }
 
-class _AdminEditQuestionScreenState extends State<AdminEditQuestionScreen> {
+class AdminEditQuestionScreenState extends State<AdminEditQuestionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _textController = TextEditingController();
-  final _option1Controller = TextEditingController();
-  final _option2Controller = TextEditingController();
-  final _option3Controller = TextEditingController();
-  final _option4Controller = TextEditingController();
-  final _orderController = TextEditingController();
+  final _optionsController = List.generate(4, (_) => TextEditingController());
+  final _correctAnswerController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
   String? _selectedLanguage;
-  int? _correctAnswer;
+  List<String> _languages = [];
 
-  Future<void> _updateQuestion(String testTypeId, String categoryId, String questionId) async {
-    if (_formKey.currentState!.validate() && _selectedLanguage != null && _correctAnswer != null) {
+  @override
+  void initState() {
+    super.initState();
+    _loadQuestion();
+  }
+
+  Future<void> _loadQuestion() async {
+    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+    final testTypeId = data['testTypeId'] as String;
+    final categoryId = data['categoryId'] as String;
+    final questionId = data['questionId'] as String;
+    final categoryDoc = await _firestore
+        .collection('test_types')
+        .doc(testTypeId)
+        .collection('categories')
+        .doc(categoryId)
+        .get();
+    final questionDoc = await _firestore
+        .collection('test_types')
+        .doc(testTypeId)
+        .collection('categories')
+        .doc(categoryId)
+        .collection('questions')
+        .doc(questionId)
+        .get();
+    setState(() {
+      _languages = List<String>.from(categoryDoc['languages'] ?? []);
+      _selectedLanguage = questionDoc['language'];
+      _textController.text = questionDoc['text'] ?? '';
+      final options = List<String>.from(questionDoc['options'] ?? []);
+      for (int i = 0; i < 4; i++) {
+        _optionsController[i].text = options.length > i ? options[i] : '';
+      }
+      _correctAnswerController.text = (questionDoc['correct_answer'] ?? 0).toString();
+    });
+  }
+
+  Future<void> _updateQuestion() async {
+    if (_formKey.currentState!.validate()) {
+      final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+      final testTypeId = data['testTypeId'] as String;
+      final categoryId = data['categoryId'] as String;
+      final questionId = data['questionId'] as String;
+      final contextCopy = context; // Сохраняем BuildContext
+
       await _firestore
           .collection('test_types')
           .doc(testTypeId)
@@ -31,47 +73,30 @@ class _AdminEditQuestionScreenState extends State<AdminEditQuestionScreen> {
           .collection('questions')
           .doc(questionId)
           .update({
-        'text': _textController.text.trim(),
-        'options': [
-          _option1Controller.text.trim(),
-          _option2Controller.text.trim(),
-          _option3Controller.text.trim(),
-          _option4Controller.text.trim(),
-        ],
-        'correct_answer': _correctAnswer,
         'language': _selectedLanguage,
-        'order': int.parse(_orderController.text.trim()),
+        'text': _textController.text,
+        'options': _optionsController.map((controller) => controller.text).toList(),
+        'correct_answer': int.parse(_correctAnswerController.text),
       });
-      context.go('/admin');
+
+      if (contextCopy.mounted) {
+        contextCopy.go('/admin');
+      }
     }
   }
 
   @override
   void dispose() {
     _textController.dispose();
-    _option1Controller.dispose();
-    _option2Controller.dispose();
-    _option3Controller.dispose();
-    _option4Controller.dispose();
-    _orderController.dispose();
+    for (var controller in _optionsController) {
+      controller.dispose();
+    }
+    _correctAnswerController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String testTypeId = data['testTypeId'];
-    final String categoryId = data['categoryId'];
-    final String questionId = data['questionId'];
-    _textController.text = data['text'];
-    _option1Controller.text = data['options'][0];
-    _option2Controller.text = data['options'][1];
-    _option3Controller.text = data['options'][2];
-    _option4Controller.text = data['options'][3];
-    _orderController.text = data['order'].toString();
-    _selectedLanguage = data['language'];
-    _correctAnswer = data['correctAnswer'];
-
     return Scaffold(
       appBar: AppBar(title: const Text("Edit Question")),
       body: Padding(
@@ -80,90 +105,72 @@ class _AdminEditQuestionScreenState extends State<AdminEditQuestionScreen> {
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text("Select Language", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: _selectedLanguage,
+                  hint: const Text("Select Language"),
+                  isExpanded: true,
+                  items: _languages.map((language) {
+                    return DropdownMenuItem<String>(
+                      value: language,
+                      child: Text(language),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedLanguage = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
                 CustomTextField(
                   controller: _textController,
                   labelText: "Question Text",
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return "Please enter the question text";
+                      return "Please enter question text";
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
+                ...List.generate(4, (index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: CustomTextField(
+                      controller: _optionsController[index],
+                      labelText: "Option ${index + 1}",
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return "Please enter option ${index + 1}";
+                        }
+                        return null;
+                      },
+                    ),
+                  );
+                }),
                 CustomTextField(
-                  controller: _option1Controller,
-                  labelText: "Option 1",
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter option 1";
-                    }
-                    return null;
-                  },
-                ),
-                CustomTextField(
-                  controller: _option2Controller,
-                  labelText: "Option 2",
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter option 2";
-                    }
-                    return null;
-                  },
-                ),
-                CustomTextField(
-                  controller: _option3Controller,
-                  labelText: "Option 3",
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter option 3";
-                    }
-                    return null;
-                  },
-                ),
-                CustomTextField(
-                  controller: _option4Controller,
-                  labelText: "Option 4",
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter option 4";
-                    }
-                    return null;
-                  },
-                ),
-                CustomTextField(
-                  controller: _orderController,
-                  labelText: "Order",
+                  controller: _correctAnswerController,
+                  labelText: "Correct Answer Index (0-3)",
                   keyboardType: TextInputType.number,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return "Please enter the order";
+                      return "Please enter correct answer index";
                     }
-                    if (int.tryParse(value) == null) {
-                      return "Please enter a valid number";
+                    final index = int.tryParse(value);
+                    if (index == null || index < 0 || index > 3) {
+                      return "Please enter a valid index (0-3)";
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-                Text("Language: $_selectedLanguage", style: const TextStyle(fontSize: 16)),
-                const SizedBox(height: 16),
-                const Text("Select Correct Answer", style: TextStyle(fontSize: 16)),
-                ...List.generate(4, (index) {
-                  return RadioListTile<int>(
-                    title: Text("Option ${index + 1}"),
-                    value: index,
-                    groupValue: _correctAnswer,
-                    onChanged: (value) {
-                      setState(() {
-                        _correctAnswer = value;
-                      });
-                    },
-                  );
-                }),
                 CustomButton(
                   text: "Update Question",
-                  onPressed: () => _updateQuestion(testTypeId, categoryId, questionId),
+                  onPressed: _updateQuestion,
+                  color: Colors.blue,
                 ),
               ],
             ),

@@ -1,21 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/list_item.dart';
 
 class AdminContestsScreen extends StatelessWidget {
-  final _firestore = FirebaseFirestore.instance;
-
-  Future<void> _deleteContest(String contestId) async {
-    await _firestore.collection('contests').doc(contestId).delete();
-  }
+  const AdminContestsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("Contests"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              context.go('/admin/add-contest');
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('contests').snapshots(),
+        stream: FirebaseFirestore.instance.collection('contests').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final contests = snapshot.data!.docs;
@@ -23,24 +28,31 @@ class AdminContestsScreen extends StatelessWidget {
             itemCount: contests.length,
             itemBuilder: (context, index) {
               final contest = contests[index];
-              return ListItem(
-                title: "Contest on ${contest['date']}",
-                onEdit: () {
-                  context.go('/admin/edit-contest', extra: {
-                    'id': contest.id,
-                    'testTypeId': contest['test_type_id'],
-                    'date': contest['date'],
-                  });
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('test_types')
+                    .doc(contest['test_type_id'])
+                    .get(),
+                builder: (context, testTypeSnapshot) {
+                  if (!testTypeSnapshot.hasData) return const SizedBox.shrink();
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                    child: ListTile(
+                      title: Text("Contest: ${testTypeSnapshot.data!['name']}"),
+                      subtitle: Text("Date: ${contest['date']}"),
+                      onTap: () {
+                        context.go(
+                          '/admin/edit-contest',
+                          extra: {'contestId': contest.id},
+                        );
+                      },
+                    ),
+                  );
                 },
-                onDelete: () => _deleteContest(contest.id),
               );
             },
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/admin/add-contest'),
-        child: const Icon(Icons.add),
       ),
     );
   }

@@ -3,19 +3,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../domain/providers/theme_provider.dart';
+import '../../domain/providers/theme_provider.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 
 class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
   @override
-  _SettingsScreenState createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class SettingsScreenState extends State<SettingsScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
-  final _emailController = TextEditingController();
   List<String> _availableTests = [];
   List<String> _selectedTests = [];
   String? _errorMessage;
@@ -46,20 +49,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _updateEmail() async {
-    final user = _auth.currentUser;
-    if (user != null && _emailController.text.trim() != user.email) {
-      try {
-        await user.updateEmail(_emailController.text.trim());
-        await _firestore.collection('users').doc(user.uid).update({
-          'email': _emailController.text.trim(),
-        });
-        setState(() {
-          _errorMessage = "Email updated successfully";
-        });
-      } on FirebaseAuthException catch (e) {
-        setState(() {
-          _errorMessage = e.message;
-        });
+    if (_formKey.currentState!.validate()) {
+      final user = _auth.currentUser;
+      if (user != null && _emailController.text.trim() != user.email) {
+        try {
+          await user.verifyBeforeUpdateEmail(_emailController.text.trim());
+          await _firestore.collection('users').doc(user.uid).update({
+            'email': _emailController.text.trim(),
+          });
+          setState(() {
+            _errorMessage = "Verification email sent. Please verify to update your email.";
+          });
+        } on FirebaseAuthException catch (e) {
+          setState(() {
+            _errorMessage = e.message;
+          });
+        }
       }
     }
   }
@@ -70,15 +75,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _firestore.collection('users').doc(user.uid).update({
         'preferred_tests': _selectedTests,
       });
-      setState(() {
-        _errorMessage = "Settings saved successfully";
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Settings saved successfully";
+        });
+      }
     }
   }
 
   Future<void> _logout() async {
     await _auth.signOut();
-    context.go('/');
+    if (mounted) {
+      context.go('/');
+    }
   }
 
   @override
@@ -96,49 +105,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Change Email", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              CustomTextField(
-                controller: _emailController,
-                labelText: "Email",
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Please enter your email";
-                  }
-                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                    return "Please enter a valid email";
-                  }
-                  return null;
-                },
-              ),
-              CustomButton(
-                text: "Update Email",
-                onPressed: _updateEmail,
-                color: Colors.blue,
-              ),
-              const SizedBox(height: 16),
-              const Text("Select Theme", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: themeProvider.themeMode == ThemeMode.dark ? 'dark' : 'light',
-                hint: const Text("Select Theme"),
-                isExpanded: true,
-                items: ['light', 'dark'].map((theme) {
-                  return DropdownMenuItem<String>(
-                    value: theme,
-                    child: Text(theme),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  themeProvider.setTheme(value == 'dark' ? ThemeMode.dark : ThemeMode.light);
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text("Select Test Types", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ..._availableTests.map((test) {
-                return CheckboxListTile(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Change Email", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                CustomTextField(
+                  controller: _emailController,
+                  labelText: "Email",
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please enter your email";
+                    }
+                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                      return "Please enter a valid email";
+                    }
+                    return null;
+                  },
+                ),
+                CustomButton(
+                  text: "Update Email",
+                  onPressed: _updateEmail,
+                  color: Colors.blue,
+                ),
+                const SizedBox(height: 16),
+                const Text("Select Theme", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: themeProvider.themeMode == ThemeMode.dark ? 'dark' : 'light',
+                  hint: const Text("Select Theme"),
+                  isExpanded: true,
+                  items: ['light', 'dark'].map((theme) {
+                    return DropdownMenuItem<String>(
+                      value: theme,
+                      child: Text(theme),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    themeProvider.setTheme(value == 'dark' ? ThemeMode.dark : ThemeMode.light);
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text("Select Test Types", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ..._availableTests.map((test) => CheckboxListTile(
                   title: Text(test),
                   value: _selectedTests.contains(test),
                   onChanged: (bool? value) {
@@ -150,26 +160,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
                     });
                   },
-                );
-              }).toList(),
-              CustomButton(
-                text: "Save Settings",
-                onPressed: _saveSettings,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 16),
-              if (_errorMessage != null)
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(color: _errorMessage!.contains("successfully") ? Colors.green : Colors.red),
+                )),
+                CustomButton(
+                  text: "Save Settings",
+                  onPressed: _saveSettings,
+                  color: Colors.green,
                 ),
-              const SizedBox(height: 16),
-              CustomButton(
-                text: "Logout",
-                onPressed: _logout,
-                color: Colors.red,
-              ),
-            ],
+                const SizedBox(height: 16),
+                if (_errorMessage != null)
+                  Text(
+                    _errorMessage!,
+                    style: TextStyle(color: _errorMessage!.contains("successfully") ? Colors.green : Colors.red),
+                  ),
+                const SizedBox(height: 16),
+                CustomButton(
+                  text: "Logout",
+                  onPressed: _logout,
+                  color: Colors.red,
+                ),
+              ],
+            ),
           ),
         ),
       ),

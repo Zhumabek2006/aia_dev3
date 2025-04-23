@@ -5,18 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 class TestScreen extends StatefulWidget {
+  const TestScreen({super.key});
+
   @override
-  _TestScreenState createState() => _TestScreenState();
+  State<TestScreen> createState() => TestScreenState();
 }
 
-class _TestScreenState extends State<TestScreen> {
+class TestScreenState extends State<TestScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   List<Map<String, dynamic>> _questions = [];
   int _currentQuestionIndex = 0;
   int _correctAnswers = 0;
   int? _selectedOption;
-  int _totalPoints = 0;
   int _timeSpent = 0; // В минутах
   int _totalTime = 0; // В минутах
   int _remainingSeconds = 0; // Для таймера в секундах
@@ -63,7 +64,7 @@ class _TestScreenState extends State<TestScreen> {
         .limit(30)
         .get();
 
-    // Получаем баллы за вопрос и общее время
+    // Получаем общее время
     final categoryDoc = await _firestore
         .collection('test_types')
         .doc(testTypeId)
@@ -71,7 +72,6 @@ class _TestScreenState extends State<TestScreen> {
         .doc(categoryId)
         .get();
 
-    final pointsPerQuestion = categoryDoc['points_per_question'] ?? 1;
     final totalTime = _parseDuration(categoryDoc['duration'] ?? '1h');
 
     setState(() {
@@ -86,7 +86,6 @@ class _TestScreenState extends State<TestScreen> {
       }).toList();
       _totalTime = totalTime;
       _remainingSeconds = totalTime * 60; // В секундах
-      _totalPoints = _questions.length * pointsPerQuestion;
     });
 
     // Запускаем таймер
@@ -120,7 +119,9 @@ class _TestScreenState extends State<TestScreen> {
         });
         timer.cancel();
         _saveTestResult();
-        context.go('/main');
+        if (mounted) {
+          context.go('/main');
+        }
       } else {
         setState(() {
           _remainingSeconds--;
@@ -145,7 +146,9 @@ class _TestScreenState extends State<TestScreen> {
     } else {
       _timer?.cancel();
       _saveTestResult();
-      context.go('/main');
+      if (mounted) {
+        context.go('/main');
+      }
     }
   }
 
@@ -165,8 +168,8 @@ class _TestScreenState extends State<TestScreen> {
         .doc(categoryId)
         .get();
 
-    final pointsPerQuestion = categoryDoc['points_per_question'] ?? 1;
-    final points = _correctAnswers * pointsPerQuestion;
+    final pointsPerQuestion = (categoryDoc['points_per_question'] ?? 1) as num;
+    final points = (_correctAnswers * pointsPerQuestion).toInt();
 
     // Сохраняем результат в test_history
     await _firestore.collection('users').doc(user!.uid).collection('test_history').add({
@@ -195,9 +198,11 @@ class _TestScreenState extends State<TestScreen> {
       });
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Test completed! Score: $points")),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Test completed! Score: $points")),
+      );
+    }
   }
 
   @override
