@@ -7,63 +7,140 @@ import '../widgets/custom_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
   String? _errorMessage;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    print('LoginScreen: initState called');
+    // Проверяем состояние авторизации после первого рендеринга
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('LoginScreen: Checking auth state');
+      _checkAuthState();
+    });
+  }
+
+  Future<void> _checkAuthState() async {
+    setState(() {
+      _isLoading = true;
+      print('LoginScreen: Setting _isLoading to true');
+    });
+
+    try {
+      final user = _auth.currentUser;
+      print('LoginScreen: Current user: $user');
+      if (user != null) {
+        if (user.emailVerified) {
+          final userDoc = await _firestore.collection('users').doc(user.uid).get();
+          final role = userDoc['role'] ?? 'user';
+          print('LoginScreen: User role: $role');
+          if (mounted) {
+            if (role == 'admin') {
+              print('LoginScreen: Redirecting to /admin');
+              context.go('/admin');
+            } else {
+              print('LoginScreen: Redirecting to /main');
+              context.go('/main');
+            }
+          }
+        } else {
+          if (mounted) {
+            print('LoginScreen: Redirecting to /verify-code');
+            context.go('/verify-code');
+          }
+        }
+      } else {
+        print('LoginScreen: No user logged in');
+      }
+    } catch (e) {
+      print('LoginScreen: Error in _checkAuthState: $e');
+      setState(() {
+        _errorMessage = "Error checking auth state: $e";
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          print('LoginScreen: Setting _isLoading to false');
+        });
+      }
+    }
+  }
 
   Future<void> _login() async {
+    print('LoginScreen: Login button pressed');
     if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        print('LoginScreen: Starting login process');
+      });
+
       try {
-        // Вход через Firebase Authentication
-        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        final userCredential = await _auth.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        // Получение данных пользователя из Firestore
-        DocumentSnapshot userDoc = await _firestore
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .get();
-
-        if (userDoc.exists) {
-          String role = userDoc['role'] ?? 'user';
-
-          // Проверка роли и перенаправление
-          if (role == 'admin' &&
-              _emailController.text.trim() == 'admin@gmail.com' &&
-              _passwordController.text.trim() == 'admin123') {
-            context.go('/admin');
+        final user = userCredential.user;
+        print('LoginScreen: Login successful, user: $user');
+        if (user != null) {
+          if (user.emailVerified) {
+            final userDoc = await _firestore.collection('users').doc(user.uid).get();
+            final role = userDoc['role'] ?? 'user';
+            print('LoginScreen: User role after login: $role');
+            if (mounted) {
+              if (role == 'admin') {
+                print('LoginScreen: Redirecting to /admin after login');
+                context.go('/admin');
+              } else {
+                print('LoginScreen: Redirecting to /main after login');
+                context.go('/main');
+              }
+            }
           } else {
-            context.go('/main');
+            if (mounted) {
+              print('LoginScreen: Redirecting to /verify-code after login');
+              context.go('/verify-code');
+            }
           }
-        } else {
-          setState(() {
-            _errorMessage = "User data not found. Please contact support.";
-          });
         }
       } on FirebaseAuthException catch (e) {
+        print('LoginScreen: FirebaseAuthException: ${e.message}');
         setState(() {
           _errorMessage = e.message;
         });
       } catch (e) {
+        print('LoginScreen: General error: $e');
         setState(() {
           _errorMessage = "An error occurred: $e";
         });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            print('LoginScreen: Login process finished');
+          });
+        }
       }
     }
   }
 
   @override
   void dispose() {
+    print('LoginScreen: dispose called');
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -71,6 +148,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('LoginScreen: build called, _isLoading: $_isLoading');
+    if (_isLoading) {
+      print('LoginScreen: Showing CircularProgressIndicator');
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    print('LoginScreen: Rendering login UI');
     return Scaffold(
       appBar: AppBar(title: const Text("Login")),
       body: Padding(
@@ -123,6 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {
+                  print('LoginScreen: Navigating to /register');
                   context.go('/register');
                 },
                 child: const Text("Don't have an account? Register"),

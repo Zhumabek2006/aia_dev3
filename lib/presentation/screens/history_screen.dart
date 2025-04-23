@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-class HistoryScreen extends StatelessWidget {
-  HistoryScreen({super.key});
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
 
+  @override
+  State<HistoryScreen> createState() => HistoryScreenState();
+}
+
+class HistoryScreenState extends State<HistoryScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
@@ -19,85 +24,46 @@ class HistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
 
+    if (user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/');
+      });
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text("History")),
+      appBar: AppBar(title: const Text("Test History")),
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('users')
-            .doc(user!.uid)
+            .doc(user.uid)
             .collection('test_history')
             .orderBy('date', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final tests = snapshot.data!.docs;
-          if (tests.isEmpty) {
-            return const Center(child: Text("No test history available."));
-          }
 
-          // Рассчитываем общий итог
-          int totalCorrectAnswers = 0;
-          int totalQuestions = 0;
-          int totalPoints = 0;
-          int totalTimeSpent = 0;
-          int totalTime = 0;
-
-          for (var test in tests) {
-            totalCorrectAnswers += test['correct_answers'] as int;
-            totalQuestions += test['total_questions'] as int;
-            totalPoints += test['points'] as int;
-            totalTimeSpent += test['time_spent'] as int;
-            totalTime += test['total_time'] as int;
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: tests.length,
-                  itemBuilder: (context, index) {
-                    final test = tests[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-                      child: ListTile(
-                        title: Text("${test['test_type']} - ${test['category']}"),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Date: ${_formatDate(test['date'])}"),
-                            Text("Score: ${test['correct_answers']}/${test['total_questions']}"),
-                            Text("Points: ${test['points']}"),
-                            Text("Time: ${test['time_spent']} min/${test['total_time']} min"),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Card(
-                  color: Colors.blue[50],
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Summary",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Text("Total Correct: $totalCorrectAnswers/$totalQuestions"),
-                        Text("Total Points: $totalPoints"),
-                        Text("Total Time: $totalTimeSpent min/$totalTime min"),
-                      ],
-                    ),
+          return ListView.builder(
+            itemCount: tests.length,
+            itemBuilder: (context, index) {
+              final test = tests[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+                child: ListTile(
+                  title: Text("${test['test_type']} - ${test['category']}"),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Date: ${_formatDate(test['date'])}"),
+                      Text("Correct Answers: ${test['correct_answers']}/${test['total_questions']}"),
+                      Text("Points: ${test['points']}"),
+                      Text("Time Spent: ${test['time_spent']} min"),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
